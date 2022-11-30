@@ -1,5 +1,5 @@
 trait IDay {
-  def execute(input: String): (String, String)
+  def execute(input: String): (Any, Any)
 
   val incomplete: String = "INCOMPLETE"
 }
