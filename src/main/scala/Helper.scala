@@ -18,7 +18,7 @@ object Helper {
     val pattern: Regex = ("(.+)" + delimiter + "(.+)").r
     pattern.findFirstMatchIn(line) match {
       case Some(x) => (x.group(1), x.group(2))
-      case None => sys.error("could not split " + line + " with " + delimiter)
+      case None => sys.error(s"could not split $line with $delimiter")
     }
   }
 }

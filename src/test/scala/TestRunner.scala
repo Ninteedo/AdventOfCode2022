@@ -9,13 +9,13 @@ object TestRunner {
     println(getDayResult(n))
   }
 
-  def dayString(n: Int): String = if (n < 10) "0" + n.toString else n.toString
+  def dayString(n: Int): String = if (n < 10) s"0$n" else s"$n"
 
   def getDayResult(n: Int): String = {
     val dayRunner: IDay = dayRunners(n)
-    val source: Source = Source.fromFile("input/" + dayString(n) + ".txt")
+    val source: Source = Source.fromFile(s"input/${dayString(n)}.txt")
     val input: String = try source.mkString finally source.close()
     val result = dayRunner.execute(input)
-    "Day " + n + ": (Part 1: " + result._1.toString + ", Part 2: " + result._2.toString + ")"
+    s"Day $n: (Part 1: ${result._1}, Part 2: ${result._2})"
   }
 }
