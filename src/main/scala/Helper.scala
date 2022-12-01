@@ -2,15 +2,15 @@ import scala.jdk.StreamConverters.StreamHasToScala
 import scala.util.matching.Regex
 
 object Helper {
-  def mapAllMatches[A](pattern: Regex, input: String, f: Regex.Match => A): Seq[A] = {
+  def mapAllMatches[A](pattern: Regex, input: String, f: Regex.Match => A): Iterable[A] = {
     pattern.findAllMatchIn(input).map{patternMatch => f(patternMatch)}.toSeq
   }
 
-  def readLines[A](input: String, f: String => A): Seq[A] = {
+  def readLines[A](input: String, f: String => A): Iterable[A] = {
     input.lines().toScala(LazyList).map(f)
   }
 
-  def readLinesInt(input: String): Seq[Int] = {
+  def readLinesInt(input: String): Iterable[Int] = {
     readLines(input, _.toInt)
   }
 
