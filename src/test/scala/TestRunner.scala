@@ -15,7 +15,9 @@ object TestRunner {
     val dayRunner: IDay = dayRunners(n)
     val source: Source = Source.fromFile(s"input/${dayString(n)}.txt")
     val input: String = try source.mkString finally source.close()
+    val startTime = System.currentTimeMillis()
     val result = dayRunner.execute(input)
-    s"Day $n: (Part 1: ${result._1}, Part 2: ${result._2})"
+    val executionTime = System.currentTimeMillis() - startTime
+    s"Day $n: (Part 1: ${result._1}, Part 2: ${result._2}) ${executionTime}ms"
   }
 }
