@@ -5,21 +5,15 @@ object Day03 extends IDay {
   }
 
   def part1(rucksacks: Iterable[String]): Int = {
-    def findReappearingItem(rucksack: String): Char = {
-      val n: Int = rucksack.length
-      val (first, second) = (rucksack.substring(0, n / 2), rucksack.substring(n / 2, n))
-      reappears(first, second).head
-    }
+    def findReappearingItem(sack: String): Char = reappears(sack.take(sack.length / 2), sack.drop(sack.length / 2)).head
 
     rucksacks.map(findReappearingItem).map(itemPriority).sum
   }
 
   def part2(rucksacks: Iterable[String]): Int = {
-    def findBadge(rucksackGroup: Iterable[String]): Char =
-      rucksackGroup.tail.fold(rucksackGroup.head)(reappears).head
+    def findBadge(group: Iterable[String]): Char = group.tail.fold(group.head)(reappears).head
 
-    val groups: Iterable[Iterable[String]] =
-      rucksacks.zipWithIndex.groupBy{ pair: (String, Int) => pair._2 / 3 }.values.map(_.map(_._1))
+    val groups: Iterable[Iterable[String]] = rucksacks.zipWithIndex.groupBy(_._2 / 3).values.map(_.map(_._1))
     groups.map(findBadge).map(itemPriority).sum
   }
 
