@@ -2,7 +2,7 @@ import scala.io.Source
 
 object TestRunner {
   val dayRunners: List[IDay] =
-    List(Day00, Day01, Day02, Day03, Day04, Day05, Day06, Day07)  // to be extended
+    List(Day00, Day01, Day02, Day03, Day04, Day05, Day06, Day07, Day08)  // to be extended
 
   def main(args: Array[String]): Unit = {
     val n: Int = args(0).toInt
