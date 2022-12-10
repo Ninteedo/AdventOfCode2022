@@ -13,7 +13,7 @@ object Day10 extends IDay {
       }
     }
 
-    val commands: Iterable[Command] = Helper.readLines(input, readCommand).toList
+    val commands: Iterable[Command] = Helper.readLines(input, readCommand)
     (part1(commands), part2(commands))
   }
 
@@ -22,12 +22,12 @@ object Day10 extends IDay {
     var currX = 1
     var res: List[A] = List()
 
-    def processCmd(cmd: Command): Unit = {
-      def incrCycle(): Unit = {
-        res = f(cycle)(currX) :: res
-        cycle += 1
-      }
+    def incrCycle(): Unit = {
+      res = f(cycle)(currX) :: res
+      cycle += 1
+    }
 
+    def processCmd(cmd: Command): Unit = {
       cmd match {
         case AddX(x) => incrCycle(); incrCycle(); currX += x
         case Noop() => incrCycle()
