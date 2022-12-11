@@ -6,69 +6,62 @@ object Day11 extends IDay {
       val startingItemsPattern = "\\s+Starting items: ([\\d, ]+)".r
       val operationPattern = "\\s+Operation: new = old ([+*]) (old|\\d+)".r
       val testPattern = "\\s+Test: divisible by (\\d+)".r
-      val trueDestPattern = "\\s+If true: throw to monkey (\\d+)".r
-      val falseDestPattern = "\\s+If false: throw to monkey (\\d+)".r
+      val destPattern = "\\s+If (false|true): throw to monkey (\\d+)".r
 
-      var startingItems: Iterable[Int] = List()
+      var startingItems: Iterable[Long] = List()
       var operation: Long => Long = identity
-      var testDiv: Int = 0
-      var trueDest: Int = 0
-      var falseDest: Int = 0
+      var (testDiv, trueDest, falseDest) = (0, 0, 0)
 
       Helper.readLines(str, identity).foreach {
-        case startingItemsPattern(items: String) => startingItems = items.split(", ").map(_.toInt)
+        case startingItemsPattern(items: String) => startingItems = items.split(", ").map(_.toLong)
         case operationPattern(op, other) => operation =
           if (op == "+") _ + other.toInt
-          else if (other != "old") _ * other.toInt else { x: Long => x * x }
+          else if (other != "old") _ * other.toInt
+          else { x: Long => x * x }
         case testPattern(divisor) => testDiv = divisor.toInt
-        case trueDestPattern(n) => trueDest = n.toInt
-        case falseDestPattern(n) => falseDest = n.toInt
+        case destPattern(destName, n) => if (destName == "true") trueDest = n.toInt else falseDest = n.toInt
         case _ =>
       }
       new Monkey(startingItems, operation, testDiv, trueDest, falseDest)
     }
 
-    val monkeys: Array[Monkey] = Helper.mapAllMatches("Monkey \\d+:([^M]+)((\\r?\\n){2}|(\\r?\\n$)|$)".r, input,
-      { m => readMonkey(m.group(1)) }).toArray
+    val monkeyPattern = "Monkey \\d+:([^M]+)((\\r?\\n){2}|(\\r?\\n$)|$)".r
+    val monkeys: Array[Monkey] = Helper.mapAllMatches(monkeyPattern, input, { m => readMonkey(m.group(1)) }).toArray
 
     (part1(monkeys), part2(monkeys))
   }
 
 
-  class Monkey(val startItems: Iterable[Int], val operation: Long => Long,
+  class Monkey(val startItems: Iterable[Long], val operation: Long => Long,
                val testDiv: Int, val trueDest: Int, val falseDest: Int) {
     val items: mutable.Queue[Long] = mutable.Queue()
-    items.enqueueAll(startItems.map(_.toLong))
-
-    var inspectCount = 0
+    items.enqueueAll(startItems)
+    var inspectCount: Long = 0
 
     def inspect(divideByThree: Boolean, bigDiv: Long): (Long, Int) = {
       inspectCount += 1
-
-      var worryLevel: Long = items.dequeue()
-      worryLevel = operation(worryLevel) % bigDiv
-      worryLevel = if (divideByThree) (worryLevel / 3.0).floor.toInt else worryLevel
+      var worryLevel: Long = operation(items.dequeue()) % bigDiv
+      if (divideByThree) worryLevel = (worryLevel / 3.0).floor.toInt
       (worryLevel, if (worryLevel % testDiv == 0) trueDest else falseDest)
     }
 
     def reset(): Unit = {
       inspectCount = 0
-      items.dequeueAll(_ => true)
-      items.enqueueAll(startItems.map(_.toLong))
+      items.clear()
+      items.enqueueAll(startItems)
     }
   }
 
 
   def activeMonkeysProduct(monkeys: Array[Monkey], rounds: Int, divideByThree: Boolean, bigDiv: Long): Long = {
-    def monkeyTurn(monkey: Monkey): Unit =
-      while (monkey.items.nonEmpty) {
-        val (worryLevel, destMonkey) = monkey.inspect(divideByThree, bigDiv)
-        monkeys(destMonkey).items.enqueue(worryLevel)
-      }
+    def monkeyTurn(monkey: Monkey): Unit = while (monkey.items.nonEmpty) {
+      val (worryLevel, destMonkey) = monkey.inspect(divideByThree, bigDiv)
+      monkeys(destMonkey).items.enqueue(worryLevel)
+    }
 
     monkeys.foreach(_.reset())
     (0 until rounds).foreach(_ => monkeys.foreach(monkeyTurn))
-    val inspectionCounts = monkeys.map(_.inspectCount.toLong).toList
+    val inspectionCounts = monkeys.map(_.inspectCount).toList
     inspectionCounts.sorted.takeRight(2).product
   }
 
