@@ -3,7 +3,7 @@ import scala.io.Source
 object TestRunner {
   val dayRunners: Array[IDay] = Array(
       Day00, Day01, Day02, Day03, Day04, Day05, Day06, Day07, Day08, Day09, Day10, Day11, Day12,
-      Day13)
+      Day13, Day14)
 
   def main(args: Array[String]): Unit = {
     val n: Int = args(0).toInt
