@@ -27,38 +27,34 @@ object Day15 extends IDay {
   def whichBeaconInRange(sensorBeacons: Iterable[SensorBeacon])(point: Point): Option[SensorBeacon] =
     sensorBeacons.find(beacon => distance(point, beacon._1) <= distance(beacon._1, beacon._2))
 
-  def remainingBeaconWidth(point: Point, sensorBeacon: SensorBeacon): Int = {
-    val pureWidth = distance(sensorBeacon._1, sensorBeacon._2) - (point._2 - sensorBeacon._1._2).abs
-    val xDiff = (sensorBeacon._1._1 - pureWidth) - point._1
-    pureWidth * 2 + xDiff + 1
-  }
-
-  def rowCoverageMinMax(sensorBeacons: Iterable[SensorBeacon])(row: Int): (Int, Int) = {
-    def beaconXMinMax(sensorBeacon: SensorBeacon): (Int, Int) = {
-      val pureWidth = distance(sensorBeacon._1, sensorBeacon._2) - (row - sensorBeacon._1._2).abs
-      (sensorBeacon._1._1 - pureWidth, sensorBeacon._1._1 + pureWidth)
-    }
-
-    val beaconMinMaxes = sensorBeacons.map(beaconXMinMax)
-    (beaconMinMaxes.map(_._1).min, beaconMinMaxes.map(_._2).max)
-  }
-
   def part1(sensorBeaconPairs: Iterable[SensorBeacon]): Int = {
     val row = 2000000
-    val (lineMinX, lineMaxX) = rowCoverageMinMax(sensorBeaconPairs)(row)
 
-    var count = 0
+    def pureWidth(y: Int, sensorBeacon: SensorBeacon): Int =
+      distance(sensorBeacon._1, sensorBeacon._2) - (y - sensorBeacon._1._2).abs
+
+    def beaconXMinMax(sensorBeacon: SensorBeacon): (Int, Int) = {
+      val width = pureWidth(row, sensorBeacon)
+      (sensorBeacon._1._1 - width, sensorBeacon._1._1 + width)
+    }
+
+    val beaconMinMaxes = sensorBeaconPairs.map(beaconXMinMax)
+    val (lineMinX, lineMaxX) = (beaconMinMaxes.map(_._1).min, beaconMinMaxes.map(_._2).max)
+
+    val beaconCount = sensorBeaconPairs.map(_._2).filter(_._2 == row).toSet.size
+
+    var coveredCount = 0
     var curr: Point = (lineMinX, row)
 
     while (curr._1 <= lineMaxX) whichBeaconInRange(sensorBeaconPairs)(curr) match {
-      case Some(beaconSensor) =>
-        val width = remainingBeaconWidth(curr, beaconSensor)
-        count += width
+      case Some(sensorBeacon) =>
+        val width = pureWidth(curr._2, sensorBeacon) + sensorBeacon._1._1 - curr._1 + 1
+        coveredCount += width
         curr = addPoints(curr, (width, 0))
       case None => curr = addPoints(curr, (1, 0))
     }
-    val beaconCount = sensorBeaconPairs.map(_._2).filter(_._2 == row).toSet.size
-    count - beaconCount
+
+    coveredCount - beaconCount
   }
 
   type AltPoint = Point
