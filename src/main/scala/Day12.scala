@@ -2,17 +2,17 @@ import scala.collection.mutable
 
 object Day12 extends IDay {
   type HeightMap = Array[Array[Int]]
-  type Point = (Int, Int)
+  type Frontier = mutable.PriorityQueue[(Point2D, Int)]
 
   override def execute(input: String): (Any, Any) = {
-    def readHeightMap(input: String): (HeightMap, Point, Point) = {
+    def readHeightMap(input: String): (HeightMap, Point2D, Point2D) = {
       def readChar(c: Char): Int = c match {
         case 'S' => 1
         case 'E' => 26
         case c => c - 'a' + 1
       }
 
-      def findCoords(search: Char): Point = {
+      def findCoords(search: Char): Point2D = {
         val x: ((Char, Int), Int) = Helper.readLines(input, identity)
           .zipWithIndex
           .map(outer => outer._1.zipWithIndex.zip(LazyList.continually(outer._2)))
@@ -20,7 +20,7 @@ object Day12 extends IDay {
           .head
           .filter(inner => inner._1._1 == search)
           .head
-        (x._1._2, x._2)
+        new Point2D(x._1._2, x._2)
       }
 
       (Helper.readLines(input, _.map(readChar).toArray).toArray, findCoords('S'), findCoords('E'))
@@ -30,40 +30,41 @@ object Day12 extends IDay {
     (part1(heightMap, start, end), part2(heightMap, end))
   }
 
-  def getHeight(heightMap: HeightMap, point: Point): Int = {
-    heightMap(point._2)(point._1)
+  def getHeight(heightMap: HeightMap, point: Point2D): Int = {
+    heightMap(point.y)(point.x)
   }
 
-  def part1(heightMap: HeightMap, start: Point, end: Point): Int = {
-    def addToFrontier(visited: Set[Point], frontier: mutable.PriorityQueue[(Point, Int)], curr: Point)(p: Point): Boolean =
-      getHeight(heightMap, p) <= getHeight(heightMap, curr) + 1 && !visited.contains(p)
+  def part1(heightMap: HeightMap, start: Point2D, end: Point2D): Int = {
+    def addToFrontier(visited: Set[Point2D], frontier: Frontier, curr: Point2D)(point: Point2D): Boolean =
+      getHeight(heightMap, point) <= getHeight(heightMap, curr) + 1 && !visited.contains(point)
 
-    val ordering = Ordering.by({ p: (Point, Int) => -(p._2 + ((p._1._1 - end._1).abs + (p._1._2 - end._2).abs)) })
+    val ordering: Ordering[(Point2D, Int)] = Ordering.by(pair => -(pair._2 + pair._1.mannDist(end)))
 
     hillClimb(mutable.PriorityQueue((start, 0))(ordering), _ == end, addToFrontier)(heightMap)
   }
 
-  def part2(heightMap: HeightMap, end: Point): Int = {
-    def addToFrontier(visited: Set[Point], frontier: mutable.PriorityQueue[(Point, Int)], curr: Point)(p: Point): Boolean =
-      getHeight(heightMap, p) >= getHeight(heightMap, curr) - 1 &&
-        !visited.contains(p) &&
-        !frontier.exists(q => q._1 == p)
+  def part2(heightMap: HeightMap, end: Point2D): Int = {
+    def addToFrontier(visited: Set[Point2D], frontier: Frontier, curr: Point2D)(point: Point2D): Boolean =
+      getHeight(heightMap, point) >= getHeight(heightMap, curr) - 1 &&
+        !visited.contains(point) &&
+        !frontier.exists(_._1 == point)
 
-    val ordering = Ordering.by({ p: (Point, Int) => -(p._2 - getHeight(heightMap, p._1) / 2) })
+    val ordering: Ordering[(Point2D, Int)] = Ordering.by(pair => -(pair._2 - getHeight(heightMap, pair._1) / 2))
 
     hillClimb(mutable.PriorityQueue((end, 0))(ordering), getHeight(heightMap, _) == 1, addToFrontier)(heightMap)
   }
 
-  def hillClimb(startFrontier: mutable.PriorityQueue[(Point, Int)], successCondition: Point => Boolean,
-                frontierCondition: (Set[Point], mutable.PriorityQueue[(Point, Int)], Point) => Point => Boolean)
+  def hillClimb(startFrontier: Frontier, successCondition: Point2D => Boolean,
+                frontierCondition: (Set[Point2D], Frontier, Point2D) => Point2D => Boolean)
                (heightMap: HeightMap): Int = {
-    val frontier: mutable.PriorityQueue[(Point, Int)] = startFrontier
-    var visited: Set[Point] = Set()
+    val frontier: Frontier = startFrontier
+    var visited: Set[Point2D] = Set()
+    val heightMapSizeLimit: Point2D = new Point2D(heightMap.head.length - 1, heightMap.length - 1)
 
-    def neighbours(point: Point): Iterable[Point] =
-      List((1, 0), (-1, 0), (0, 1), (0, -1))
-        .map(d => (point._1 + d._1, point._2 + d._2))
-        .filter(p => p._1 >= 0 && p._1 < heightMap.head.length && p._2 >= 0 && p._2 < heightMap.length)
+    def neighbours(point: Point2D): Iterable[Point2D] =
+      List(Point2D.xVec(1), Point2D.xVec(-1), Point2D.yVec(1), Point2D.yVec(-1))
+        .map(_ + point)
+        .filter(_.inArea(Point2D.zero, heightMapSizeLimit))
 
     while (frontier.nonEmpty) {
       val (point, currDist) = frontier.dequeue()

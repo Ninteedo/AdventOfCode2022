@@ -1,64 +1,41 @@
 object Day18 extends IDay {
-  type Point = (Int, Int, Int) // (x,y,z)
-
-  override def execute(input: String): (Any, Any) = {
-    val droplet: List[Point] = Helper.readLines(input, readPoint).toList
+  override def execute(input: String): (Int, Int) = {
+    val droplet: List[Point3D] = Helper.readLines(input, readPoint).toList
     (part1(droplet), part2(droplet))
   }
 
-  def readPoint(str: String): Point = {
+  def readPoint(str: String): Point3D = {
     val pattern = "(\\d+),(\\d+),(\\d+)".r
     str match {
-      case pattern(x, y, z) => (x.toInt, y.toInt, z.toInt)
+      case pattern(x, y, z) => new Point3D(x.toInt, y.toInt, z.toInt)
     }
   }
 
-  val DIRECTIONS: LazyList[Point] = LazyList((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
+  def neighbourPoints(point: Point3D): Iterable[Point3D] = Point3D.directions.map(_ + point)
 
-  def addPoints(a: Point, b: Point): Point = (a._1 + b._1, a._2 + b._2, a._3 + b._3)
-
-  def neighbourPoints(point: Point): Iterable[Point] =
-    DIRECTIONS.map(addPoints(point, _))
-
-  def dropletBounds(droplet: List[Point]): (Point, Point) = (
-    (droplet.map(_._1).min, droplet.map(_._2).min, droplet.map(_._3).min),
-    (droplet.map(_._1).max, droplet.map(_._2).max, droplet.map(_._3).max)
+  def dropletBounds(droplet: List[Point3D]): (Point3D, Point3D) = (
+    new Point3D(droplet.map(_.x).min, droplet.map(_.y).min, droplet.map(_.z).min),
+    new Point3D(droplet.map(_.x).max, droplet.map(_.y).max, droplet.map(_.z).max)
   )
 
-  def getDirComponent(point: Point, dir: Point): Int = {
-    if (dir._1 != 0) point._1
-    else if (dir._2 != 0) point._2
-    else point._3
-  }
+  def inBounds(curr: Point3D, bounds: (Point3D, Point3D)): Boolean = curr.inVolume(bounds._1, bounds._2)
 
-  def boundInDirection(dir: Point, bounds: (Point, Point)): Int = {
-    val minMaxBounds = if (dir._1 + dir._2 + dir._3 == -1) bounds._1 else bounds._2
-    getDirComponent(minMaxBounds, dir)
-  }
+  def dropletFaces(droplet: List[Point3D]): List[Point3D] = droplet.flatMap(neighbourPoints).filter(!droplet.contains(_))
 
-  def inBounds(dir: Point, curr: Point, bound: Int): Boolean = {
-    if (dir._1 + dir._2 + dir._3 == -1) bound < getDirComponent(curr, dir)
-    else getDirComponent(curr, dir) < bound
-  }
+  def part1(droplet: List[Point3D]): Int = dropletFaces(droplet).size
 
-  def dropletFaces(droplet: List[Point]): List[Point] = droplet.flatMap(neighbourPoints).filter(!droplet.contains(_))
-
-  def part1(droplet: List[Point]): Int = dropletFaces(droplet).size
-
-  def part2(droplet: List[Point]): Int = {
+  def part2(droplet: List[Point3D]): Int = {
     val filteringPoints: List[FilteringPoint] = dropletFaces(droplet).map(new FilteringPoint(_))
-    val bounds: (Point, Point) = dropletBounds(droplet)
+    val bounds: (Point3D, Point3D) = dropletBounds(droplet)
     filteringPoints.foreach(_.checkLineOfSight(droplet, bounds, filteringPoints))
 
     var anyChange: Boolean = true
-    while (anyChange) {
-      anyChange = filteringPoints.exists(_.checkDependentsExterior())
-    }
+    while (anyChange) anyChange = filteringPoints.exists(_.checkDependentsExterior())
 
     filteringPoints.count(_.isExterior)
   }
 
-  class FilteringPoint(point: Point) {
+  class FilteringPoint(point: Point3D) {
     var dependentOn: List[FilteringPoint] = List()
     var isExterior: Boolean = false
 
@@ -66,15 +43,14 @@ object Day18 extends IDay {
 
     def getDependents: List[FilteringPoint] = dependentOn
 
-    def isPoint(test: Point): Boolean = point == test
+    def isPoint(test: Point3D): Boolean = point == test
 
-    def checkLineOfSight(droplet: List[Point], dropletBounds: (Point, Point),
+    def checkLineOfSight(droplet: List[Point3D], dropletBounds: (Point3D, Point3D),
                          filteringPoints: List[FilteringPoint]): Boolean = {
-      def checkInDirection(dir: Point): Boolean = {
-        val bound: Int = boundInDirection(dir, dropletBounds)
-        var curr: Point = point
+      def checkInDirection(dir: Point3D): Boolean = {
+        var curr: Point3D = point
         var added: Boolean = false
-        while (inBounds(dir, curr, bound)) {
+        while (inBounds(curr, dropletBounds)) {
           if (droplet.contains(curr)) return false
           if (curr != point && !added) {
             val filteringPoint: Option[FilteringPoint] = filteringPoints.find(_.isPoint(curr))
@@ -87,12 +63,12 @@ object Day18 extends IDay {
               addDependent(filteringPoint.get)
             }
           }
-          curr = addPoints(curr, dir)
+          curr += dir
         }
         true
       }
 
-      val result: Boolean = DIRECTIONS.exists(checkInDirection)
+      val result: Boolean = Point3D.directions.exists(checkInDirection)
       if (result) isExterior = true
       result
     }

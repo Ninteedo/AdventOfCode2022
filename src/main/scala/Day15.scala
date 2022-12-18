@@ -1,6 +1,5 @@
 object Day15 extends IDay {
-  type Point = (Int, Int)
-  type SensorBeacon = (Point, Point)
+  type SensorBeacon = (Point2D, Point2D)
 
   override def execute(input: String): (Int, Long) = {
     val sensorBeaconPairs: Iterable[SensorBeacon] = Helper.readLines(input, readLine)
@@ -10,7 +9,7 @@ object Day15 extends IDay {
   def readLine(line: String): SensorBeacon = {
     val pattern = "Sensor at x=(-?\\d+), y=(-?\\d+): closest beacon is at x=(-?\\d+), y=(-?\\d+)".r
     line match {
-      case pattern(x1, y1, x2, y2) => ((x1.toInt, y1.toInt), (x2.toInt, y2.toInt))
+      case pattern(x1, y1, x2, y2) => (new Point2D(x1.toInt, y1.toInt), new Point2D(x2.toInt, y2.toInt))
       case _ => sys.error("pattern mismatch on input: " + line)
     }
   }
@@ -20,66 +19,60 @@ object Day15 extends IDay {
     if (a.end < b.end) b.end else a.end
   )
 
-  def distance(a: Point, b: Point): Int = (a._1 - b._1).abs + (a._2 - b._2).abs
-
-  def addPoints(a: Point, b: Point): Point = (a._1 + b._1, a._2 + b._2)
-
-  def whichBeaconInRange(sensorBeacons: Iterable[SensorBeacon])(point: Point): Option[SensorBeacon] =
-    sensorBeacons.find(beacon => distance(point, beacon._1) <= distance(beacon._1, beacon._2))
+  def whichBeaconInRange(sensorBeacons: Iterable[SensorBeacon])(point: Point2D): Option[SensorBeacon] =
+    sensorBeacons.find(sbPair => point.mannDist(sbPair._1) <= sbPair._1.mannDist(sbPair._2))
 
   def part1(sensorBeaconPairs: Iterable[SensorBeacon]): Int = {
     val row = 2000000
 
     def pureWidth(y: Int, sensorBeacon: SensorBeacon): Int =
-      distance(sensorBeacon._1, sensorBeacon._2) - (y - sensorBeacon._1._2).abs
+      sensorBeacon._1.mannDist(sensorBeacon._2) - (y - sensorBeacon._1.y).abs
 
     def beaconXMinMax(sensorBeacon: SensorBeacon): (Int, Int) = {
       val width = pureWidth(row, sensorBeacon)
-      (sensorBeacon._1._1 - width, sensorBeacon._1._1 + width)
+      (sensorBeacon._1.x - width, sensorBeacon._1.x + width)
     }
 
     val beaconMinMaxes = sensorBeaconPairs.map(beaconXMinMax)
     val (lineMinX, lineMaxX) = (beaconMinMaxes.map(_._1).min, beaconMinMaxes.map(_._2).max)
 
-    val beaconCount = sensorBeaconPairs.map(_._2).filter(_._2 == row).toSet.size
+    val beaconCount = sensorBeaconPairs.map(_._2).filter(_.y == row).toSet.size
 
     var coveredCount = 0
-    var curr: Point = (lineMinX, row)
+    var curr: Point2D = new Point2D(lineMinX, row)
 
-    while (curr._1 <= lineMaxX) whichBeaconInRange(sensorBeaconPairs)(curr) match {
+    while (curr.x <= lineMaxX) whichBeaconInRange(sensorBeaconPairs)(curr) match {
       case Some(sensorBeacon) =>
-        val width = pureWidth(curr._2, sensorBeacon) + sensorBeacon._1._1 - curr._1 + 1
+        val width = pureWidth(curr.y, sensorBeacon) + sensorBeacon._1.x - curr.x + 1
         coveredCount += width
-        curr = addPoints(curr, (width, 0))
-      case None => curr = addPoints(curr, (1, 0))
+        curr += Point2D.xVec(width)
+      case None => curr += Point2D.xVec(1)
     }
 
     coveredCount - beaconCount
   }
 
-  type AltPoint = Point
+  type AltPoint = Point2D
   type AltSensorBound = (AltPoint, AltPoint)
   type Gap = (Int, Range)
 
   def part2(sensorBeaconPairs: Iterable[SensorBeacon]): Long = {
     val yMax = 4000000
 
-    def tuningFrequency(point: Point): Long = point._1.toLong * yMax + point._2
+    def tuningFrequency(point: Point2D): Long = point.x.toLong * yMax + point.y
 
-    def toAltAxis(point: Point): AltPoint = (point._1 - point._2, point._1 + point._2)
+    def toAltAxis(point: Point2D): AltPoint = new Point2D(point.x - point.y, point.x + point.y)
 
-    def fromAltAxis(altPoint: AltPoint): Point = ((altPoint._1 + altPoint._2) / 2, (-altPoint._1 + altPoint._2) / 2)
+    def fromAltAxis(altPoint: AltPoint): Point2D = new Point2D((altPoint.x + altPoint.y) / 2, (-altPoint.x + altPoint.y) / 2)
 
     def altSensorBound(sensorBeacon: SensorBeacon): AltSensorBound = {
-      val r = distance(sensorBeacon._1, sensorBeacon._2)
+      val r = sensorBeacon._1.mannDist(sensorBeacon._2)
       val center = toAltAxis(sensorBeacon._1)
-      (addPoints(center, (-r, -r)), addPoints(center, (r, r)))
+      (center + new AltPoint(-r, -r), center + new AltPoint(r, r))
     }
 
-    def inAltBound(point: AltPoint)(altSensorBound: AltSensorBound): Boolean = {
-      altSensorBound._1._1 <= point._1 && point._1 <= altSensorBound._2._1 &&
-        altSensorBound._1._2 <= point._2 && point._2 <= altSensorBound._2._2
-    }
+    def inAltBound(point: AltPoint)(altSensorBound: AltSensorBound): Boolean =
+      point.inArea(altSensorBound._1, altSensorBound._2)
 
     val bounds = sensorBeaconPairs.map(altSensorBound)
 
@@ -88,16 +81,16 @@ object Day15 extends IDay {
 
     def gapsPairCond(pairX: (Int, Range), pairY: (Int, Range)): Boolean =
       pairY._2.contains(pairX._1) && pairX._2.contains(pairY._1) &&
-        !bounds.exists(inAltBound((pairX._1, pairY._1)))
+        !bounds.exists(inAltBound(new AltPoint(pairX._1, pairY._1)))
 
     def checkXGap(a: AltSensorBound, b: AltSensorBound): Unit = {
-      if (a._2._1 + 2 == b._1._1)
-        xGaps = (a._2._1 + 1, overlap(Range.inclusive(a._1._2, a._2._2), Range.inclusive(b._1._2, b._2._2))) :: xGaps
+      if (a._2.x + 2 == b._1.x)
+        xGaps = (a._2.x + 1, overlap(Range.inclusive(a._1.y, a._2.y), Range.inclusive(b._1.y, b._2.y))) :: xGaps
     }
 
     def checkYGap(a: AltSensorBound, b: AltSensorBound): Unit = {
-      if (a._2._2 + 2 == b._1._2)
-        yGaps = (a._2._2 + 1, overlap(Range.inclusive(a._1._1, a._2._1), Range.inclusive(b._1._1, b._2._1))) :: yGaps
+      if (a._2.y + 2 == b._1.y)
+        yGaps = (a._2.y + 1, overlap(Range.inclusive(a._1.x, a._2.x), Range.inclusive(b._1.x, b._2.x))) :: yGaps
     }
 
     bounds.foreach(a => bounds.filter(a != _).foreach(b => {
@@ -112,7 +105,7 @@ object Day15 extends IDay {
       .find(p => gapsPairCond(p._1, p._2))
       .get
 
-    tuningFrequency(fromAltAxis((lonelyGap._1._1, lonelyGap._2._1)))
+    tuningFrequency(fromAltAxis(new AltPoint(lonelyGap._1._1, lonelyGap._2._1)))
   }
 
 }

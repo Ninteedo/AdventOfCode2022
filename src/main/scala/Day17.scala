@@ -1,12 +1,12 @@
 import Day17.Jet.Jet
 
 object Day17 extends IDay {
-  type Point = (Int, Int) // (y, x)
-  type Rock = List[Point]
+  type Rock = List[Point2D]
   type PrunePoint = (Rock, Int, Int) // (ground formation, rock index, jet index)
   type MemoPoint = (PrunePoint, (Int, Int, Int)) // (prune point, (iterMaxRockHeight, iterRocksDropped, pruneFloor))
 
   override def execute(input: String): (Any, Any) = {
+
     val rocksInput = "####\n\n.#.\n###\n.#.\n\n..#\n..#\n###\n\n#\n#\n#\n#\n\n##\n##"
 
     val jets = readJets(input.strip())
@@ -17,12 +17,12 @@ object Day17 extends IDay {
 
   def readRocks(rocksInput: String): Array[Rock] = {
     def readRock(str: String): Rock = {
-      var result: List[Point] = List()
+      var result: List[Point2D] = List()
       Helper.readLines(str, _.zipWithIndex.toArray).zipWithIndex
         .foreach({ p: (Array[(Char, Int)], Int) =>
           p._1.foreach({ q: (Char, Int) =>
             q._1 match {
-              case '#' => result = (p._2, q._2) :: result
+              case '#' => result = new Point2D(q._2, p._2) :: result
               case '.' =>
             }
           })
@@ -31,8 +31,8 @@ object Day17 extends IDay {
     }
 
     def yMirror(rock: Rock): Rock = {
-      val yMax = rock.map(_._1).max
-      rock.map(point => (yMax - point._1, point._2))
+      val yMax = rock.map(_.y).max
+      rock.map(point => new Point2D(point.x, yMax - point.y))
     }
 
     rocksInput.split("(\\r?\\n){2}").map(readRock).map(yMirror)
@@ -67,34 +67,34 @@ object Day17 extends IDay {
     var startPrunePoint: PrunePoint = (List(), 0, 0)
     var memory: Map[PrunePoint, MemoPoint] = Map()
 
-    def checkCollision(move: Point, cond: Point => Boolean, yAxis: Boolean, minOnAxis: Boolean)(rock: Rock): Boolean = {
-      def oneOnAxis(pair: (Int, Rock)): Point = {
-        val targets: List[Int] = pair._2.map(p => if (yAxis) p._1 else p._2)
+    def checkCollision(move: Point2D, cond: Point2D => Boolean, yAxis: Boolean, minOnAxis: Boolean)(rock: Rock): Boolean = {
+      def oneOnAxis(pair: (Int, Rock)): Point2D = {
+        val targets: List[Int] = pair._2.map(p => if (yAxis) p.y else p.x)
         val target: Int = if (minOnAxis) targets.min else targets.max
-        pair._2.find(p => (if (yAxis) p._1 else p._2) == target).get
+        pair._2.find(p => (if (yAxis) p.y else p.x) == target).get
       }
 
       val afterMove: Rock = rock
-        .groupBy(p => if (yAxis) p._2 else p._1)
+        .groupBy(p => if (yAxis) p.x else p.y)
         .toList
         .map(oneOnAxis)
-        .map(p => (p._1 + move._1, p._2 + move._2))
+        .map(p => new Point2D(p.x + move.x, p.y + move.y))
 
       afterMove.exists(cond) || afterMove.exists(rockFormation.contains(_))
     }
 
     def checkLeftCollision: Rock => Boolean =
-      checkCollision((0, -1), _._2 < 0, yAxis = false, minOnAxis = true)
+      checkCollision(new Point2D(-1, 0), _.x < 0, yAxis = false, minOnAxis = true)
 
     def checkRightCollision: Rock => Boolean =
-      checkCollision((0, 1), _._2 >= CHAMBER_WIDTH, yAxis = false, minOnAxis = false)
+      checkCollision(new Point2D(1, 0), _.x >= CHAMBER_WIDTH, yAxis = false, minOnAxis = false)
 
     def checkDownCollision: Rock => Boolean =
-      checkCollision((-1, 0), _._1 < 0, yAxis = true, minOnAxis = true)
+      checkCollision(new Point2D(0, -1), _.y < 0, yAxis = true, minOnAxis = true)
 
     def moveRockJet(rock: Rock, jet: Jet): Rock = jet match {
-      case Jet.Left => if (checkLeftCollision(rock)) rock else rock.map(point => (point._1, point._2 - 1))
-      case Jet.Right => if (checkRightCollision(rock)) rock else rock.map(point => (point._1, point._2 + 1))
+      case Jet.Left => if (checkLeftCollision(rock)) rock else rock.map(_ + new Point2D(-1, 0))
+      case Jet.Right => if (checkRightCollision(rock)) rock else rock.map(_ + new Point2D(1, 0))
     }
 
     def moveRockDown(rock: Rock): Option[Rock] =
@@ -102,13 +102,13 @@ object Day17 extends IDay {
         settleRock(rock)
         None
       } else
-        Some(rock.map(point => (point._1 - 1, point._2)))
+        Some(rock.map(_ - new Point2D(0, 1)))
 
     def settleRock(rock: Rock): Unit = {
       iterRocksDropped += 1
       rockFormation = rock ++ rockFormation
-      iterMaxRockHeight = Math.max(rock.map(_._1).max + 1, iterMaxRockHeight)
-      val pruneRow: Option[Int] = rock.map(_._1).toSet.filter(checkCompleteRow).maxOption
+      iterMaxRockHeight = Math.max(rock.map(_.y).max + 1, iterMaxRockHeight)
+      val pruneRow: Option[Int] = rock.map(_.y).toSet.filter(checkCompleteRow).maxOption
       if (pruneRow.isDefined) pruneBelow(pruneRow.get)
     }
 
@@ -182,13 +182,13 @@ object Day17 extends IDay {
     }
 
     def rowToGroundFormation(row: Int): Rock =
-      rockFormation.filter(_._1 >= row).map(point => (point._1 - row, point._2))
+      rockFormation.filter(_.y >= row).map(point => new Point2D(point.x, point.y - row))
 
     def checkCompleteRow(row: Int): Boolean =
-      rockFormation.filter(point => point._1 == row || point._1 == row - 1).map(_._2).toSet.size == CHAMBER_WIDTH
+      rockFormation.filter(point => point.y == row || point.y == row - 1).map(_.x).toSet.size == CHAMBER_WIDTH
 
     def spawnRock(rockType: Rock): Rock =
-      rockType.map(point => (point._1 + SPAWN_FROM_BOTTOM_DIST + iterMaxRockHeight, point._2 + SPAWN_FROM_LEFT_DIST))
+      rockType.map(_ + new Point2D(SPAWN_FROM_LEFT_DIST, SPAWN_FROM_BOTTOM_DIST + iterMaxRockHeight))
 
     def nextRock(): Rock = {
       val result: Rock = rocks(rockIndex)
