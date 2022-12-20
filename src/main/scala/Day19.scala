@@ -5,8 +5,7 @@ import scala.collection.mutable
 object Day19 extends IDay {
   type ResourceMap = Map[Resource, Int]
 
-  override def execute(input: String): (Any, Any) = {
-    val input = "Blueprint 1: Each ore robot costs 4 ore. Each clay robot costs 2 ore. Each obsidian robot costs 3 ore and 14 clay.  Each geode robot costs 2 ore and 7 obsidian.\nBlueprint 2: Each ore robot costs 2 ore. Each clay robot costs 3 ore. Each obsidian robot costs 3 ore and 8 clay. Each geode robot costs 3 ore and 12 obsidian."
+  override def execute(input: String): (Int, Int) = {
     val blueprints: List[Blueprint] = Helper.readLines(input, Blueprint.read).toList
     (part1(blueprints), part2(blueprints))
   }
@@ -16,7 +15,7 @@ object Day19 extends IDay {
   }
 
   def part2(blueprints: List[Blueprint]): Int = {
-    blueprints.take(3).map(b => b.bestGeodeCount(32)).sum
+    blueprints.take(3).map(b => b.bestGeodeCount(32)).product
   }
 
   def printPath(end: TimeNode): String = {
@@ -29,15 +28,15 @@ object Day19 extends IDay {
     result.mkString("\n")
   }
 
-  class Blueprint(val num: Int, val robots: Map[Resource, Robot]) {
+  class Blueprint(val num: Int, val robots: Map[Resource, ResourceMap]) {
     def bestGeodeCount(minutes: Int): Int = {
       def calculateMaxCosts: ResourceMap = {
         var result: ResourceMap = Resource.resourceMap
         Resource.values.foreach({ robotResource: Resource =>
-          val maxCost: Int = Resource.values.map(robots(_).cost(robotResource)).max
+          val maxCost: Int = Resource.values.map(robots(_)(robotResource)).max
           result += (robotResource -> maxCost)
         })
-        result + (Geode -> Int.MaxValue)
+        result + (Geode -> Int.MaxValue)  // no geode costs, so set to infinite
       }
 
       val start: TimeNode = new TimeNode(this, minutes, Resource.resourceMap + (Ore -> 1),
@@ -47,62 +46,42 @@ object Day19 extends IDay {
       while (frontier.nonEmpty) {
         val node: TimeNode = frontier.dequeue()
         if (node.timeUp)
-          return node.geodeCount // + "\n" + printPath(node) + "\n"
+          return node.geodeCount
         node.possibilities.foreach(frontier.enqueue(_))
       }
 
-      sys.error("frontier empty")
+      0  // default if no geodes can be mined
     }
   }
 
   object Blueprint {
     def read(line: String): Blueprint = {
-      def readRobot(resource: String): Robot = {
+      def readRobot(resource: String): ResourceMap = {
         val pattern = (".*".r + resource + " robot costs ([\\w\\s]+)\\..*".r).r
-        val cost: String = line match {
-          case pattern(capture) => capture
+        val cost: String = line match { case pattern(capture) => capture }
+
+        val orePattern = "(\\d+) ore".r
+        val oreClayPattern = "(\\d+) ore and (\\d+) clay".r
+        val oreObsidianPattern = "(\\d+) ore and (\\d+) obsidian".r
+
+        cost match {
+          case orePattern(ore) =>
+            Resource.resourceMap + (Ore -> ore.toInt)
+          case oreClayPattern(ore, clay) =>
+            Resource.resourceMap + (Ore -> ore.toInt) + (Clay -> clay.toInt)
+          case oreObsidianPattern(ore, obsidian) =>
+            Resource.resourceMap + (Ore -> ore.toInt) + (Obsidian -> obsidian.toInt)
         }
-        Robot.read(resource, cost)
       }
 
       val numPattern = "Blueprint (\\d+):.*".r
-      val num: Int = line match {
-        case numPattern(num) => num.toInt
-      }
+      val num: Int = line match { case numPattern(num) => num.toInt }
 
       val resources = List("ore", "clay", "obsidian", "geode")
-      var robots: Map[Resource, Robot] = Map()
+      var robots: Map[Resource, ResourceMap] = Map()
       resources.foreach(resource => robots += Resource.read(resource) -> readRobot(resource))
 
       new Blueprint(num, robots)
-    }
-  }
-
-  class Robot(val collects: Resource, val cost: ResourceMap) {
-
-  }
-
-  object Robot {
-    def read(collects: String, cost: String): Robot = {
-      val orePattern = "(\\d+) ore".r
-      val oreClayPattern = "(\\d+) ore and (\\d+) clay".r
-      val oreObsidianPattern = "(\\d+) ore and (\\d+) obsidian".r
-
-      val collectionResource: Resource = collects match {
-        case "ore" => Ore
-        case "clay" => Clay
-        case "obsidian" => Obsidian
-        case "geode" => Geode
-      }
-
-      cost match {
-        case orePattern(ore) =>
-          new Robot(collectionResource, Resource.resourceMap + (Ore -> ore.toInt))
-        case oreClayPattern(ore, clay) =>
-          new Robot(collectionResource, Resource.resourceMap + (Ore -> ore.toInt) + (Clay -> clay.toInt))
-        case oreObsidianPattern(ore, obsidian) =>
-          new Robot(collectionResource, Resource.resourceMap + (Ore -> ore.toInt) + (Obsidian -> obsidian.toInt))
-      }
     }
   }
 
@@ -111,34 +90,31 @@ object Day19 extends IDay {
     def nextResources(newRobot: Option[Resource]): ResourceMap = {
       var newMap: ResourceMap = resources
       Resource.values.foreach(resource =>
-        newMap += resource -> (resources.getOrElse(resource, 0) + robots.getOrElse(resource, 0))
+        newMap += resource -> (stockpile(resource) + robotCount(resource))
       )
       if (newRobot.isDefined) {
         Resource.values.foreach({ resource =>
-          newMap += resource -> (newMap.getOrElse(resource, 0) - blueprint.robots(newRobot.get).cost.getOrElse(resource, 0))
+          newMap += resource -> (newMap.getOrElse(resource, 0) - robotCost(newRobot.get, resource))
         })
       }
       newMap
     }
 
-    def nextRobots(newRobot: Resource): ResourceMap = {
-      robots + (newRobot -> (robots.getOrElse(newRobot, 0) + 1))
-    }
+    def nextRobots(newRobot: Resource): ResourceMap = robots + (newRobot -> (robotCount(newRobot) + 1))
 
-    def canBuild(newRobot: Resource): Boolean = {
-      Resource.values.forall({ resource =>
-        robotCost(newRobot, resource) <= stockpile(resource)
-      })
-    }
+    def canBuild(newRobot: Resource): Boolean = Resource.values.forall({ resource =>
+      robotCost(newRobot, resource) <= stockpile(resource)
+    })
 
     def possibilities: List[TimeNode] = {
-      var result: List[TimeNode] = List()
+      var result: List[TimeNode] = List(new TimeNode(blueprint, time - 1, robots, nextResources(None), maxCosts, this))
       Resource.values.foreach({ resource =>
-        if (canBuild(resource)) result =
-          new TimeNode(blueprint, time - 1, nextRobots(resource), nextResources(Some(resource)), maxCosts, this) :: result
+        if (canBuild(resource) && maxResourceCost(resource) > robotCount(resource)) {
+            val newTimeNode: TimeNode = new TimeNode(blueprint, time - 1, nextRobots(resource), nextResources(Some(resource)), maxCosts, this)
+            if (newTimeNode.orderingValue > 0) result = newTimeNode :: result
+          }
       })
-      result = result.filter(_.idlenessPenalty == 0).filter(_.excessiveRobotsPenalty == 0).filter(_.orderingValue > 0)
-      new TimeNode(blueprint, time - 1, robots, nextResources(None), maxCosts, this) :: result
+      result
     }
 
     def geodeCount: Int = stockpile(Geode)
@@ -146,166 +122,52 @@ object Day19 extends IDay {
     def geodeProjection: Int = geodeCount + robotCount(Geode) * time
 
     def maxExtraGeodes: Int = {
-      def gainCap(gain: Int, offset: Int): Int = ((gain * (gain + 1)) - ((gain - offset) * (gain - offset + 1))) / 2
+      // estimates maximum geodes possible by running a quick and optimistic simulation
 
-      def inverseSum(sum: Int): Int = {
-        if (sum < 0) sys.error("invalid argument for inverse sum")
-        if (sum == 0) 0
-        else if (sum == 1) 1
-        else if (sum <= 3) 2
-        else if (sum <= 6) 3
-        else if (sum <= 10) 4
-        else if (sum <= 15) 5
-        else if (sum <= 21) 6
-        else sys.error("inverse sum argument too big")
-      }
+      val obsidianTarget: Int = robotCost(Geode, Obsidian)
+      val clayTarget: Int = robotCost(Obsidian, Clay)
+      val oreTarget: Int = robotCost(Clay, Ore)
 
-      def minTimeToMeetCost(robot: Resource, cost: Resource): Int = {
-        val target: Int = robotCost(robot, cost)
-        var bots: Int = robotCount(cost)
-        var currStockpile = stockpile(cost)
-        var t: Int = 0
+      var oreBots: Int = robotCount(Ore)
+      var clayBots: Int = robotCount(Clay)
+      var obsidianBots: Int = robotCount(Obsidian)
+      var geodeBots: Int = 0
 
-        while (currStockpile < target) {
-          t += 1
-          currStockpile += bots
-          bots += 1
+      var ore: Int = stockpile(Ore)
+      var clay: Int = stockpile(Clay)
+      var obsidian: Int = stockpile(Obsidian)
+      var geodes: Int = 0
+
+      (0 until time).foreach({ _ =>
+        ore += oreBots
+        clay += clayBots
+        obsidian += obsidianBots
+        geodes += geodeBots
+
+        oreBots += 1
+        if (ore >= oreTarget) {
+          clayBots += 1
+          ore -= oreTarget
         }
-
-        t
-      }
-
-      def maxRateAtTimeSimple(resource: Resource, offset: Int): Int = {
-        Math.min(
-          maxResourceCost(resource),
-          time - offset + robotCount(resource)
-        )
-      }
-
-
-
-      // val maxOreRate: Int = robotCount(Ore) + maxRateAtTime(Ore, 0)
-
-      val timeToFirstClayBot: Int = if (robotCount(Clay) > 0) 0 else minTimeToMeetCost(Clay, Ore)
-
-      val timeToFirstObsidianBot: Int = if (robotCount(Obsidian) > 0) 0 else
-        timeToFirstClayBot + Math.max(minTimeToMeetCost(Obsidian, Clay), minTimeToMeetCost(Obsidian, Ore))
-
-      val minTimeToFirstGeodeBot: Int = if (robotCount(Geode) > 0) 0 else
-        timeToFirstObsidianBot + Math.max(minTimeToMeetCost(Geode, Obsidian), minTimeToMeetCost(Geode, Ore))
-
-      val maxGeodeRate = maxRateAtTimeSimple(Geode, minTimeToFirstGeodeBot) - robotCount(Geode) // Math.max(0, time - minTimeToFirstGeodeBot)
-
-      (maxGeodeRate * (maxGeodeRate + 1)) / 2
-    }
-
-    def excessiveRobotsPenalty: Int = {
-      Resource.values.map({robotResource =>
-        if (robotResource == Geode) 0
-        else Math.max(0, robotCount(robotResource) - maxResourceCost(robotResource))
-      }).sum
-    }
-
-    def idlenessPenalty: Int = {
-      Resource.values.map({ robotResource =>
-        if (robotResource == Geode || robotCount(robotResource) == 0) 1
-        else Math.max(0, stockpile(robotResource) - maxResourceCost(robotResource))
-      }).product
-    }
-
-    def maxExtraGeodesOld: Int = {
-      def rateCap(rate: Int, offset: Int): Int = Math.min(rate, time - offset)
-
-      def calcMaxOreRate(): Int = {
-        val oreBotCost: Int = robotCost(Ore, Ore)
-
-        var passed: Int = -stockpile(Ore) / robotCount(Ore)
-        var futureBotCount: Int = robotCount(Ore)
-        while (futureBotCount < oreBotCost) {
-          passed += oreBotCost / futureBotCount
-          futureBotCount += 1
+        if (clay >= clayTarget) {
+          obsidianBots += 1
+          clay -= clayTarget
         }
-        time + futureBotCount - passed - 1
-      }
-
-      val maxOreRate: Int = calcMaxOreRate()
-
-      def calcMaxClayRate(): Int = {
-        val clayBotCost: Int = robotCost(Clay, Ore)
-
-        var passed: Int = -stockpile(Ore) / robotCount(Ore)
-        var futureBotCount: Int = robotCount(Ore)
-        while (futureBotCount < clayBotCost) {
-          passed += clayBotCost / futureBotCount
-          futureBotCount += 1
+        if (obsidian >= obsidianTarget) {
+          geodeBots += 1
+          obsidian -= obsidianTarget
         }
-        time + futureBotCount - passed - 1
-      }
-
-
-      val maxClayRate: Int = calcMaxClayRate()
-
-      val timeToFirstClay: Int =
-        if (robotCount(Clay) > 0) 0 else (robotCost(Clay, Ore) - stockpile(Ore)) / robotCount(Ore)
-
-      // val maxClayRate: Int = stockpile(Clay) + rateCap((maxOreRate * time) / robotCost(Clay, Ore), timeToFirstClay)
-
-      val timeToFirstObsidian: Int =
-        if (robotCount(Obsidian) > 0)
-          0
-        else if (robotCount(Clay) > 0) Math.max(
-          (robotCost(Obsidian, Clay)) / maxClayRate,
-          (robotCost(Obsidian, Ore)) / maxOreRate
-        )
-        else
-          timeToFirstClay + (robotCost(Obsidian, Ore)) / maxOreRate
-
-      val maxObsidianRate: Int = if (robotCount(Obsidian) > 0) time * (time + 1) / 2
-      else {
-        val t = Math.max(maxClayRate / robotCost(Obsidian, Clay), maxOreRate / robotCost(Obsidian, Ore))
-        (t * (t + 1)) / 2
-      }
-      /*val maxObsidianRate: Int = stockpile(Obsidian) + rateCap(Math.min(
-        (maxOreRate * time) / robotCost(Obsidian, Ore),
-        (maxClayRate * time) / robotCost(Obsidian, Clay)),
-        timeToFirstObsidian
-      )*/
-
-      val timeToFirstGeode: Int = {
-        if (robotCount(Geode) > 0)
-          0
-        else if (robotCount(Obsidian) > 0) Math.max(
-          (robotCost(Geode, Obsidian)) / maxObsidianRate,
-          (robotCost(Geode, Ore)) / maxOreRate
-        )
-        else
-          timeToFirstObsidian + robotCost(Geode, Obsidian) + (robotCost(Geode, Ore)) / maxOreRate
-      }
-
-      val maxGeodeRate: Int = robotCount(Geode) + rateCap(Math.min(
-        (maxOreRate) / robotCost(Geode, Ore),
-        (maxObsidianRate) / robotCost(Geode, Obsidian)),
-        0 // timeToFirstGeode
-      )
-
-      Math.max(0, maxGeodeRate * (time - 1))
+      })
+      geodes
     }
 
-    val maxExtra: Int = maxExtraGeodes
     val orderingValue: Int = calcOrderingValue
 
-    def calcOrderingValue: Int = {
-      val result: Int = maxExtra + geodeProjection // + geodeProjection // - (excessiveRobotsPenalty * excessiveRobotsPenalty) - idlenessPenalty
-      if (parent != null && result > parent.orderingValue)
-        sys.error("invalid ordering value")
-      if (false && parent != null && maxExtra < parent.maxExtra && robots == parent.robots)
-        println("max extra changing when it shouldn't")
-      result
-    }
+    def calcOrderingValue: Int = maxExtraGeodes + geodeProjection
 
     def timeUp: Boolean = time == 0
 
-    def robotCost(robot: Resource, resource: Resource): Int = blueprint.robots(robot).cost(resource)
+    def robotCost(robot: Resource, resource: Resource): Int = blueprint.robots(robot)(resource)
 
     def robotCount(robot: Resource): Int = robots(robot)
 
