@@ -6,7 +6,7 @@ object Day20 extends IDay {
 
   def mixSequence(originalSequence: Array[Long], repeats: Int): Array[Long] = {
     val n: Int = originalSequence.length
-    var changes: Array[Long] = Array.fill(originalSequence.length)(0)
+    var changes: Array[Int] = Array.fill(originalSequence.length)(0)
 
     def negMod(a: Long, divisor: Long): Int = {
       val x = a % divisor
@@ -35,14 +35,14 @@ object Day20 extends IDay {
         val allMove: Long = -sequenceValue / (n - 1)
         val someMove: Long = allMove + (if (sequenceValue <= 0) 1 else -1)
         val extraMoveCount: Int = negMod(sequenceValue.abs, n - 1)
-        new ChangeStruct(sequenceValue, allMove, someMove, extraMoveCount, startIndex, n)
+        new ChangeStruct((sequenceValue % n).toInt, (allMove % n).toInt, (someMove % n).toInt, extraMoveCount, startIndex, n)
       }
 
       val newChanges: ChangeStruct = determineNewChanges
 
-      def newChangesOriginalValue(index: Int): Long = newChanges.getAtIndex(negModN(currentIndex(index)))
+      def newChangesOriginalValue(index: Int): Int = negModN(newChanges.getAtIndex(negModN(currentIndex(index))))
 
-      changes = changes.zip((0 until n).map(newChangesOriginalValue)).map(p => p._1 + p._2)
+      changes = changes.zip((0 until n).map(newChangesOriginalValue)).map(p => negModN(p._1 + p._2))
     }
 
     (0 until repeats).foreach(_ => originalSequence.zipWithIndex.foreach(processMove))
@@ -63,11 +63,11 @@ object Day20 extends IDay {
   }
 
 
-  class ChangeStruct(val sequenceValue: Long, val allMove: Long, val someMove: Long, val extraMoveCount: Int,
+  class ChangeStruct(val sequenceValue: Int, val allMove: Int, val someMove: Int, val extraMoveCount: Int,
                      val startIndex: Int, val n: Int) {
-    def getAtIndex(i: Int): Long = if (sequenceValue >= 0) getAtIndexPositive(i) else getAtIndexNegative(i)
+    def getAtIndex(i: Int): Int = if (sequenceValue >= 0) getAtIndexPositive(i) else getAtIndexNegative(i)
 
-    def getAtIndexPositive(i: Int): Long = {
+    def getAtIndexPositive(i: Int): Int = {
       val rightExtra: Int = Math.min(n - startIndex - 1, extraMoveCount)
       val leftExtra: Int = Math.max(0, extraMoveCount - rightExtra)
 
@@ -78,7 +78,7 @@ object Day20 extends IDay {
       else someMove
     }
 
-    def getAtIndexNegative(i: Int): Long = {
+    def getAtIndexNegative(i: Int): Int = {
       val leftExtra: Int = Math.min(startIndex, extraMoveCount)
       val rightExtra: Int = Math.max(0, extraMoveCount - leftExtra)
 
