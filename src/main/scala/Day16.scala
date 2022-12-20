@@ -1,4 +1,4 @@
-import scala.collection.mutable
+
 
 object Day16 extends IDay {
   type Valve = String
@@ -29,25 +29,13 @@ object Day16 extends IDay {
   }
 
   def part1(valves: ValveMap, connDists: => ValveAPSP, closedValves: Set[Valve], startPos: DelayedMove): Int = {
-    val start: TimeNode1 = new TimeNode1(valves, startPos, Set(), closedValves, 30, 0, connDists)
-    bestPressureSearch(start)
+    val start: TimeNode1 = new TimeNode1(valves, startPos, Set(), closedValves, 30, 0, connDists, null)
+    start.bestFirstSearch().get.getResult
   }
 
   def part2(valves: ValveMap, connDists: => ValveAPSP, closedValves: Set[Valve], startPos: DelayedMove): Int = {
-    val start: TimeNode2 = new TimeNode2(valves, startPos, startPos, Set(), closedValves, 26, 0, connDists)
-    bestPressureSearch(start)
-  }
-
-  def bestPressureSearch[T <: TimeNode[T]](start: T): Int = {
-    val frontier: mutable.PriorityQueue[T] = mutable.PriorityQueue(start)(Ordering.by(_.orderingValue))
-
-    while (frontier.nonEmpty) {
-      val node: T = frontier.dequeue()
-      if (node.timeUp) return node.getTotalPressure
-      node.possibleMoves.foreach(frontier.enqueue(_))
-    }
-
-    sys.error("frontier empty")
+    val start: TimeNode2 = new TimeNode2(valves, startPos, startPos, Set(), closedValves, 26, 0, connDists, null)
+    start.bestFirstSearch().get.getResult
   }
 
   def generateConnectionDistances(valves: ValveMap): ValveAPSP = {
@@ -93,12 +81,8 @@ object Day16 extends IDay {
 
   abstract class TimeNode[T <: TimeNode[T]](val valves: ValveMap, val openValves: Set[Valve],
                                             val closedValves: Set[Valve], val time: Int, val totalPressure: Int,
-                                            connDists: => ValveAPSP) {
-    val orderingValue: Int = calculateOrderingValue()
-
-    def calculateOrderingValue(): Int = totalPressure + pressureRate * time + maxExtraPressure + time
-
-    def possibleMoves: Iterable[T]
+                                            connDists: => ValveAPSP) extends TimeSearchNode[TimeNode[T]] {
+    override def calculateOrderingValue(): Int = totalPressure + pressureRate * time + maxExtraPressure + time
 
     def pressureRate: Int = openValves.toSeq.map(valves(_)._1).sum
 
@@ -119,21 +103,21 @@ object Day16 extends IDay {
 
     def timeToReach(target: Valve): Int
 
-    def timeUp: Boolean = time == 0
+    override def getTime: Int = time
 
-    def getTotalPressure: Int = totalPressure
+    override def getResult: Int = totalPressure
   }
 
   class TimeNode1(valves: ValveMap, location: DelayedMove, openValves: Set[Valve], closedValves: Set[Valve],
-                  time: Int, totalPressure: Int, connDists: => ValveAPSP)
+                  time: Int, totalPressure: Int, connDists: => ValveAPSP, parent: TimeNode1)
     extends TimeNode[TimeNode1](valves, openValves, closedValves, time, totalPressure, connDists) {
 
     def openValve(): TimeNode1 =
       new TimeNode1(valves, location.passTime(), openValves + location.target, closedValves - location.target,
-        time - 1, nextPressure, connDists)
+        time - 1, nextPressure, connDists, this)
 
     def newTarget(loc: DelayedMove): TimeNode1 = new TimeNode1(valves, loc, openValves, closedValves,
-      time - 1, nextPressure, connDists)
+      time - 1, nextPressure, connDists, this)
 
     def continueOrNewTargets: List[DelayedMove] = {
       if (!location.atTarget || closedValves.isEmpty) List(location.passTime())
@@ -142,18 +126,20 @@ object Day16 extends IDay {
 
     def timeToReach(target: Valve): Int = connDist(location.target, target) + location.dist
 
-    def possibleMoves: Iterable[TimeNode1] = {
+    def descendents(): Iterable[TimeNode1] = {
       if (canOpenValve(location)) List(openValve())
       else continueOrNewTargets.map(newTarget)
     }
+
+    override def getParent: TimeNode[TimeNode1] = parent
   }
 
   class TimeNode2(valves: ValveMap, location1: DelayedMove, location2: DelayedMove, openValves: Set[Valve],
-                  closedValves: Set[Valve], time: Int, totalPressure: Int, connDists: => ValveAPSP)
+                  closedValves: Set[Valve], time: Int, totalPressure: Int, connDists: => ValveAPSP, parent: TimeNode2)
     extends TimeNode[TimeNode2](valves, openValves, closedValves, time, totalPressure, connDists) {
 
     def openValve(loc1: DelayedMove, loc2: DelayedMove, open: Set[Valve], closed: Set[Valve]): TimeNode2 =
-      new TimeNode2(valves, loc1, loc2, open, closed, time - 1, nextPressure, connDists)
+      new TimeNode2(valves, loc1, loc2, open, closed, time - 1, nextPressure, connDists, this)
 
     def openValve1(loc2: DelayedMove): TimeNode2 =
       openValve(location1, loc2, openValves + location1.target, closedValves - location1.target)
@@ -166,10 +152,10 @@ object Day16 extends IDay {
         (closedValves - location1.target) - location2.target)
 
     def bothNewTargets(loc1: DelayedMove, loc2: DelayedMove): TimeNode2 = {
-      new TimeNode2(valves, loc1, loc2, openValves, closedValves, time - 1, nextPressure, connDists)
+      new TimeNode2(valves, loc1, loc2, openValves, closedValves, time - 1, nextPressure, connDists, this)
     }
 
-    def possibleMoves: Iterable[TimeNode2] = {
+    def descendents(): Iterable[TimeNode2] = {
       if (canOpenValve(location1) && canOpenValve(location2)) List(openBothValves())
       else if (canOpenValve(location1)) continueOrNewTargets(location2).map(openValve1)
       else if (canOpenValve(location2)) continueOrNewTargets(location1).map(openValve2)
@@ -190,6 +176,8 @@ object Day16 extends IDay {
       connDist(location1.target, target) + location1.dist,
       connDist(location2.target, target) + location2.dist
     )
+
+    override def getParent: TimeNode[TimeNode2] = parent
   }
 
 }

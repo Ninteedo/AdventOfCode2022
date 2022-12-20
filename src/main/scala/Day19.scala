@@ -1,7 +1,5 @@
 import Day19.Resource.{Clay, Geode, Obsidian, Ore, Resource}
 
-import scala.collection.mutable
-
 object Day19 extends IDay {
   type ResourceMap = Map[Resource, Int]
 
@@ -18,16 +16,6 @@ object Day19 extends IDay {
     blueprints.take(3).map(b => b.bestGeodeCount(32)).product
   }
 
-  def printPath(end: TimeNode): String = {
-    var result: List[String] = List()
-    var curr: TimeNode = end
-    while (curr != null) {
-      result = curr.toString :: result
-      curr = curr.parent
-    }
-    result.mkString("\n")
-  }
-
   class Blueprint(val num: Int, val robots: Map[Resource, ResourceMap]) {
     def bestGeodeCount(minutes: Int): Int = {
       def calculateMaxCosts: ResourceMap = {
@@ -36,21 +24,16 @@ object Day19 extends IDay {
           val maxCost: Int = Resource.values.map(robots(_)(robotResource)).max
           result += (robotResource -> maxCost)
         })
-        result + (Geode -> Int.MaxValue)  // no geode costs, so set to infinite
+        result + (Geode -> Int.MaxValue) // no geode costs, so set to infinite
       }
 
       val start: TimeNode = new TimeNode(this, minutes, Resource.resourceMap + (Ore -> 1),
         Resource.resourceMap, calculateMaxCosts, null)
-      val frontier: mutable.PriorityQueue[TimeNode] = mutable.PriorityQueue(start)(Ordering.by(_.orderingValue))
 
-      while (frontier.nonEmpty) {
-        val node: TimeNode = frontier.dequeue()
-        if (node.timeUp)
-          return node.geodeCount
-        node.possibilities.foreach(frontier.enqueue(_))
+      start.bestFirstSearch() match {
+        case Some(node: TimeNode) => node.getResult
+        case None => 0 // default if no geodes can be mined
       }
-
-      0  // default if no geodes can be mined
     }
   }
 
@@ -58,7 +41,9 @@ object Day19 extends IDay {
     def read(line: String): Blueprint = {
       def readRobot(resource: String): ResourceMap = {
         val pattern = (".*".r + resource + " robot costs ([\\w\\s]+)\\..*".r).r
-        val cost: String = line match { case pattern(capture) => capture }
+        val cost: String = line match {
+          case pattern(capture) => capture
+        }
 
         val orePattern = "(\\d+) ore".r
         val oreClayPattern = "(\\d+) ore and (\\d+) clay".r
@@ -75,7 +60,9 @@ object Day19 extends IDay {
       }
 
       val numPattern = "Blueprint (\\d+):.*".r
-      val num: Int = line match { case numPattern(num) => num.toInt }
+      val num: Int = line match {
+        case numPattern(num) => num.toInt
+      }
 
       val resources = List("ore", "clay", "obsidian", "geode")
       var robots: Map[Resource, ResourceMap] = Map()
@@ -86,7 +73,7 @@ object Day19 extends IDay {
   }
 
   class TimeNode(val blueprint: Blueprint, val time: Int, val robots: ResourceMap, val resources: ResourceMap,
-                 maxCosts: => ResourceMap, val parent: TimeNode) {
+                 maxCosts: => ResourceMap, val parent: TimeNode) extends TimeSearchNode[TimeNode] {
     def nextResources(newRobot: Option[Resource]): ResourceMap = {
       var newMap: ResourceMap = resources
       Resource.values.foreach(resource =>
@@ -106,20 +93,18 @@ object Day19 extends IDay {
       robotCost(newRobot, resource) <= stockpile(resource)
     })
 
-    def possibilities: List[TimeNode] = {
+    override def descendents(): List[TimeNode] = {
       var result: List[TimeNode] = List(new TimeNode(blueprint, time - 1, robots, nextResources(None), maxCosts, this))
       Resource.values.foreach({ resource =>
         if (canBuild(resource) && maxResourceCost(resource) > robotCount(resource)) {
-            val newTimeNode: TimeNode = new TimeNode(blueprint, time - 1, nextRobots(resource), nextResources(Some(resource)), maxCosts, this)
-            if (newTimeNode.orderingValue > 0) result = newTimeNode :: result
-          }
+          val newTimeNode: TimeNode = new TimeNode(blueprint, time - 1, nextRobots(resource), nextResources(Some(resource)), maxCosts, this)
+          if (newTimeNode.orderingValue > 0) result = newTimeNode :: result
+        }
       })
       result
     }
 
-    def geodeCount: Int = stockpile(Geode)
-
-    def geodeProjection: Int = geodeCount + robotCount(Geode) * time
+    def geodeProjection: Int = stockpile(Geode) + robotCount(Geode) * time
 
     def maxExtraGeodes: Int = {
       // estimates maximum geodes possible by running a quick and optimistic simulation
@@ -161,11 +146,7 @@ object Day19 extends IDay {
       geodes
     }
 
-    val orderingValue: Int = calcOrderingValue
-
-    def calcOrderingValue: Int = maxExtraGeodes + geodeProjection
-
-    def timeUp: Boolean = time == 0
+    override def calculateOrderingValue(): Int = maxExtraGeodes + geodeProjection
 
     def robotCost(robot: Resource, resource: Resource): Int = blueprint.robots(robot)(resource)
 
@@ -175,8 +156,15 @@ object Day19 extends IDay {
 
     def maxResourceCost(resource: Resource): Int = maxCosts(resource)
 
-    override def toString: String = "time=" + time + ", order=" + orderingValue + ", maxExtra=" + maxExtraGeodes +
-      ", robots=" + robots + ", resources=" + resources
+    override def getParent: TimeNode = parent
+
+    override def getTime: Int = time
+
+    override def getResult: Int = stockpile(Geode)
+
+    override def toString: String = {
+      s"time=$getTime, order=$orderingValue, maxExtra=$maxExtraGeodes, robots=$robots, resources=$resources"
+    }
   }
 
   object Resource extends Enumeration {
