@@ -4,49 +4,38 @@ object Day20 extends IDay {
     (part1(sequence), part2(sequence))
   }
 
+  def negMod(a: Long, divisor: Long): Int = {
+    val x = a % divisor
+    (if (x >= 0) x else x + divisor).toInt
+  }
+
   def mixSequence(originalSequence: Array[Long], repeats: Int): Array[Long] = {
     val n: Int = originalSequence.length
-    var changes: Array[Int] = Array.fill(originalSequence.length)(0)
-
-    def negMod(a: Long, divisor: Long): Int = {
-      val x = a % divisor
-      (if (x >= 0) x else x + divisor).toInt
-    }
+    val indexedOriginal: Array[(Long, Int)] = originalSequence.zipWithIndex
+    var changes: Array[(Int, Int)] = Array.fill(originalSequence.length)(0).zipWithIndex
 
     def negModN(index: Long): Int = negMod(index, n)
 
-    def currentIndex(originalIndex: Int): Int = negModN(originalIndex + changes(originalIndex))
-
-    def reconstructSequence: Array[Long] = {
-      originalSequence
-        .zipWithIndex
-        .zip(changes)
-        .sortBy(pair => negModN(pair._1._2 + pair._2))
-        .map(_._1._1)
-    }
+    def currentIndex(originalIndex: Int): Int = negModN(originalIndex + changes(originalIndex)._1)
 
     def processMove(pair: (Long, Int)): Unit = {
       val sequenceValue: Long = pair._1
       val originalIndex: Int = pair._2
 
       val startIndex: Int = currentIndex(originalIndex)
+      val newChanges: ChangeStruct = new ChangeStruct(sequenceValue, startIndex, n)
 
-      def determineNewChanges: ChangeStruct = {
-        val allMove: Long = -sequenceValue / (n - 1)
-        val someMove: Long = allMove + (if (sequenceValue <= 0) 1 else -1)
-        val extraMoveCount: Int = negMod(sequenceValue.abs, n - 1)
-        new ChangeStruct((sequenceValue % n).toInt, (allMove % n).toInt, (someMove % n).toInt, extraMoveCount, startIndex, n)
-      }
+      def newChangesOriginalValue(index: Int): Int = newChanges.getAtIndex(currentIndex(index))
 
-      val newChanges: ChangeStruct = determineNewChanges
-
-      def newChangesOriginalValue(index: Int): Int = negModN(newChanges.getAtIndex(negModN(currentIndex(index))))
-
-      changes = changes.zip((0 until n).map(newChangesOriginalValue)).map(p => negModN(p._1 + p._2))
+      changes = changes.map(pair => (pair._1 + newChangesOriginalValue(pair._2), pair._2))
     }
 
-    (0 until repeats).foreach(_ => originalSequence.zipWithIndex.foreach(processMove))
-    reconstructSequence
+    (0 until repeats).foreach(_ => indexedOriginal.foreach(processMove))
+
+    indexedOriginal
+      .zip(changes)
+      .sortBy(pair => negModN(pair._1._2 + pair._2._1))
+      .map(_._1._1)
   }
 
   def groveCoordinates(sequence: Array[Long]): Long = {
@@ -63,30 +52,44 @@ object Day20 extends IDay {
   }
 
 
-  class ChangeStruct(val sequenceValue: Int, val allMove: Int, val someMove: Int, val extraMoveCount: Int,
-                     val startIndex: Int, val n: Int) {
-    def getAtIndex(i: Int): Int = if (sequenceValue >= 0) getAtIndexPositive(i) else getAtIndexNegative(i)
+  class ChangeStruct(val sequenceValue: Long, val startIndex: Int, val n: Int) {
+    val allZero: Boolean = sequenceValue == 0
+    val positive: Boolean = sequenceValue > 0
+    val sequenceValueModN: Int = (sequenceValue % n).toInt
+
+    val allMove: Int = ((-sequenceValue / (n - 1)) % n).toInt
+    val someMove: Int = ((-sequenceValue / (n - 1) + (if (positive) -1 else 1)) % n).toInt
+    val extraMoveCount: Int = negMod(sequenceValue.abs, n - 1)
+
+    val (leftExtra, rightExtra): (Int, Int) = getSideExtras
+
+    def getAtIndex(i: Int): Int = if (allZero) 0 else if (positive) getAtIndexPositive(i) else getAtIndexNegative(i)
 
     def getAtIndexPositive(i: Int): Int = {
-      val rightExtra: Int = Math.min(n - startIndex - 1, extraMoveCount)
-      val leftExtra: Int = Math.max(0, extraMoveCount - rightExtra)
-
       if (i < leftExtra) someMove
       else if (i < startIndex) allMove
-      else if (i == startIndex) sequenceValue
+      else if (i == startIndex) sequenceValueModN
       else if (i > startIndex + rightExtra) allMove
       else someMove
     }
 
     def getAtIndexNegative(i: Int): Int = {
-      val leftExtra: Int = Math.min(startIndex, extraMoveCount)
-      val rightExtra: Int = Math.max(0, extraMoveCount - leftExtra)
-
       if (i < startIndex - leftExtra) allMove
       else if (i < startIndex) someMove
-      else if (i == startIndex) sequenceValue
+      else if (i == startIndex) sequenceValueModN
       else if (i >= n - rightExtra) someMove
       else allMove
+    }
+
+    def getSideExtras: (Int, Int) = if (allZero) (0, 0)
+    else if (positive) {
+      val right: Int = Math.min(n - startIndex - 1, extraMoveCount)
+      val left: Int = Math.max(0, extraMoveCount - right)
+      (left, right)
+    } else {
+      val left: Int = Math.min(startIndex, extraMoveCount)
+      val right: Int = Math.max(0, extraMoveCount - left)
+      (left, right)
     }
   }
 }
