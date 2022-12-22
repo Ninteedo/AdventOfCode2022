@@ -3,9 +3,13 @@ class Point2D(val x: Int, val y: Int) {
 
   def -(other: Point2D) = new Point2D(x - other.x, y - other.y)
 
+  def *(other: Point2D) = new Point2D(x * other.x, y * other.y)
+
   def *(factor: Int) = new Point2D(x * factor, y * factor)
 
   def /(divisor: Int) = new Point2D(x / divisor, y / divisor)
+
+  def dotProduct(other: Point2D): Int = x * other.x + y * other.y
 
   def mannDist(other: Point2D): Int = (x - other.x).abs + (y - other.y).abs
 
