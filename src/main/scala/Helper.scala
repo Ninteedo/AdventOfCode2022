@@ -16,4 +16,12 @@ object Helper {
       case None => sys.error(s"could not split $line with $delimiter")
     }
   }
+
+  def indexByPoint[A](splitInput: Iterable[Iterable[A]]): Iterable[Iterable[(A, Point2D)]] = {
+    splitInput.map(_.zipWithIndex).zipWithIndex.map({ outer: (Iterable[(A, Int)], Int) =>
+      outer._1.map({ inner: (A, Int) =>
+        (inner._1, new Point2D(inner._2, outer._2))
+      })
+    })
+  }
 }
