@@ -1,22 +1,20 @@
 import Day23.Direction.Direction
 
 object Day23 extends IDay {
-  override def execute(input: String): (Any, Any) = {
+  override def execute(input: String): (Int, Int) = {
     val initialElves: ElfMap = ElfMap.read(input)
     (part1(initialElves), part2(initialElves))
   }
 
   def part1(initialElves: ElfMap): Int = {
     var curr: ElfMap = initialElves
-    for (_ <- 1 to 10) {
-      curr = curr.next
-    }
-    curr.countEmpty
+    while (curr.time < 10) curr = curr.next
+    curr.countSpace
   }
 
   def part2(initialElves: ElfMap): Int = {
     var curr: ElfMap = initialElves
-    var prev: ElfMap = initialElves
+    var prev: ElfMap = null
     while (curr.time == 0 || curr.elvesByRow != prev.elvesByRow) {
       prev = curr
       curr = curr.next
@@ -76,17 +74,15 @@ object Day23 extends IDay {
 
       elvesByRow.toIterable.foreach(attemptMove)
 
-      def isElfClear(elf: Point2D): Boolean = {
-        !newBlockedElvesByRow.contains(elf)
-      }
+      def isElfClear(elf: Point2D): Boolean = !newBlockedElvesByRow.contains(elf)
 
       val unblockedElvesByRow: RowMapSet = {
         var result: Map[Int, Set[Int]] = Map()
         occupiedByRow.keys.foreach({ row =>
-          result += row -> occupiedByRow(row).filter(pair => isElfClear(pair._2)).keySet
+          result += row -> Set.from(occupiedByRow(row).filter(pair => isElfClear(pair._2)).keySet)
         })
         newBlockedElvesByRow.contents.keys.foreach({ row =>
-          result += row -> (result.getOrElse(row, Set()) ++ newBlockedElvesByRow.contents(row))
+          result += row -> Set.from(result.getOrElse(row, Set()) ++ newBlockedElvesByRow.contents(row))
         })
         new RowMapSet(result)
       }
@@ -97,19 +93,19 @@ object Day23 extends IDay {
       new ElfMap(unblockedElvesByRow, time + 1)
     }
 
-    def countEmpty: Int = {
-      val rectArea = (surroundingRectangle._2.x - surroundingRectangle._1.x + 1) *
-        (surroundingRectangle._2.y - surroundingRectangle._1.y + 1)
-      rectArea - elvesByRow.size
+    def countSpace: Int = {
+      val rectSize: Point2D = surroundingRectangle._2 - surroundingRectangle._1 + new Point2D(1, 1)
+      rectSize.x * rectSize.y - elvesByRow.size
     }
 
-    override def toString: String = {
-      "time=" + time + ", map=[\n" +
-        (surroundingRectangle._1.y to surroundingRectangle._2.y)
-        .map(y => (surroundingRectangle._1.x to surroundingRectangle._2.x).map(x =>
-          if (elvesByRow.contains(new Point2D(x, y))) '#'
-          else '.'
-        ).mkString("")).mkString("\n") + "\n]"
+    override def toString: String = "time=" + time + ", map=[\n" + printElfMap + "\n]"
+
+    def printElfMap: String = {
+      (surroundingRectangle._1.y to surroundingRectangle._2.y).map(y =>
+        (surroundingRectangle._1.x to surroundingRectangle._2.x).map(x =>
+          if (elvesByRow.contains(new Point2D(x, y))) '#' else '.'
+        ).mkString("")
+      ).mkString("\n")
     }
   }
 
@@ -121,7 +117,7 @@ object Day23 extends IDay {
       val surroundingRectangle: (Point2D, Point2D) = calculateSurroundingRectangle(elves)
       var rowResult: Map[Int, Set[Int]] = Map()
       for (row <- surroundingRectangle._1.y to surroundingRectangle._2.y) {
-        rowResult += row -> elves.filter(_.y == row).map(_.x)
+        rowResult += row -> Set.from(elves.filter(_.y == row).map(_.x))
       }
 
       new ElfMap(new RowMapSet(rowResult), 0)
@@ -147,11 +143,11 @@ object Day23 extends IDay {
 
   class RowMapSet(val contents: Map[Int, Set[Int]]) {
     def +(point: Point2D): RowMapSet = {
-      new RowMapSet(contents + (point.y -> (contents.getOrElse(point.y, Set()) + point.x)))
+      new RowMapSet(contents + (point.y -> (contents.getOrElse(point.y, Set.empty[Int]) + point.x)))
     }
 
     def -(point: Point2D): RowMapSet = {
-      new RowMapSet(contents + (point.y -> (contents.getOrElse(point.y, Set()) - point.x)))
+      new RowMapSet(contents + (point.y -> (contents.getOrElse(point.y, Set.empty[Int]) - point.x)))
     }
 
     def contains(point: Point2D): Boolean = {
@@ -162,7 +158,7 @@ object Day23 extends IDay {
 
     def toIterable: Iterable[Point2D] = {
       if (iterableCache.isEmpty)
-        iterableCache = Some(contents.flatMap(pair => pair._2.map(col => new Point2D(col, pair._1))))
+        iterableCache = Some(contents.flatMap(pair => pair._2.toList.map(col => new Point2D(col, pair._1))))
       iterableCache.get
     }
 
