@@ -81,7 +81,7 @@ object Day16 extends IDay {
 
   abstract class TimeNode[T <: TimeNode[T]](val valves: ValveMap, val openValves: Set[Valve],
                                             val closedValves: Set[Valve], val time: Int, val totalPressure: Int,
-                                            connDists: => ValveAPSP) extends TimeSearchNode[TimeNode[T]] {
+                                            connDists: => ValveAPSP) extends SearchNode[TimeNode[T]] {
     override def calculateOrderingValue(): Int = totalPressure + pressureRate * time + maxExtraPressure + time
 
     def pressureRate: Int = openValves.toSeq.map(valves(_)._1).sum
@@ -103,7 +103,7 @@ object Day16 extends IDay {
 
     def timeToReach(target: Valve): Int
 
-    override def getTime: Int = time
+    override def atGoal: Boolean = time == 0
 
     override def getResult: Int = totalPressure
   }

@@ -73,7 +73,7 @@ object Day19 extends IDay {
   }
 
   class TimeNode(val blueprint: Blueprint, val time: Int, val robots: ResourceMap, val resources: ResourceMap,
-                 maxCosts: => ResourceMap, val parent: TimeNode) extends TimeSearchNode[TimeNode] {
+                 maxCosts: => ResourceMap, val parent: TimeNode) extends SearchNode[TimeNode] {
     def nextResources(newRobot: Option[Resource]): ResourceMap = {
       var newMap: ResourceMap = resources
       Resource.values.foreach(resource =>
@@ -158,12 +158,12 @@ object Day19 extends IDay {
 
     override def getParent: TimeNode = parent
 
-    override def getTime: Int = time
+    override def atGoal: Boolean = time == 0
 
     override def getResult: Int = stockpile(Geode)
 
     override def toString: String = {
-      s"time=$getTime, order=$orderingValue, maxExtra=$maxExtraGeodes, robots=$robots, resources=$resources"
+      s"TimeNode(time=$time, order=$orderingValue, maxExtra=$maxExtraGeodes, robots=$robots, resources=$resources)"
     }
   }
 
